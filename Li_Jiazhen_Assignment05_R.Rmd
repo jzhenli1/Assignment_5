@@ -39,8 +39,117 @@ setwd(
 ### Getting to know the API
 
 <div class="alert alert-block alert-info">
-5. Visit the documentation website for the API provided by ticketmaster.com (see here). Familiarize yourself with the features and functionalities of the Ticketmaster Discovery API. Have a particular look at rate limits.
+5. Visit the documentation website for the API provided by ticketmaster.com. Familiarize yourself with the features and functionalities of the Ticketmaster Discovery API. Have a particular look at rate limits.
 6. Whithin the scope of this assignment, you do not have to request your own API key. Instead retrieve a valid key from the API Explorer. This API key enables you to perform the GET requests needed throughout this assignment. Even though this API key is not secret per se (it is publicly visible on the API Explorer website), please comply to the common secrecy practices discussed in the lecture and the tutorial: Treat the API key as a secret token. Your API key should neither appear in the code that you are submitting nor in your public GitHub repository.
 </div>
 
 All API keys are issued with a default quota of 5000 API calls per day and rate limitation of 5 requests per second.
+
+```{r}
+source("Ticketmaster_API_Key.R")  # API Key in separate R file (.gitignore R files)
+```
+
+### Interacting with the API - the basics
+
+<div class="alert alert-block alert-info">
+7. Perform a first ``GET`` request, that searches for event venues in Germany (``countryCode = "DE"``). Extract
+the ``content`` from the ``response`` object and inspect the resulting list. Describe what you can see.
+</div>
+
+```{r}
+APIcontent <- GET("https://app.ticketmaster.com/discovery/v2/venues/",  # only package version v2 gives results
+                  query = list(apikey = ticketmaster_key,
+                               "countryCode" = "DE")) %>% content()
+#APIcontent
+```
+
+The content list contains an embedded list of venues, each venue with its own sublist. Each venue list contains several elements (e.g., name, type, url, timezone etc.). Some of these elements stand alone (such as `name` "Grosse Freiheit 36"), while other elements are themselves another list (such as `country` which contains both the `name` "Germany" and the `countrycode` "DE"). At the end of the content list, there is a summary of `totalElements` and `totalPages` which indicates that the request has a total of 4745 elements (aka venues) distributed over 238 pages on the website.
+
+<div class="alert alert-block alert-info">
+8. Extract the ``name``, the ``city``, the ``postalCode`` and ``address``, as well as the ``url`` and the ``longitude`` and ``latitude`` of the venues to a data frame.
+</div>
+
+```{r}
+# Extracting name
+ref <- APIcontent[["_embedded"]][["venues"]]
+Name <- map_chr(ref, ~.[["name"]])
+
+# Extracting city
+City <- map_chr(ref, ~.[["city"]][["name"]])
+
+# Extracting postal code
+PostalCode <- map(ref, ~.[["postalCode"]])
+
+nullToNA <- function(x) {         # create function to change NULL to NA
+    x[sapply(x, is.null)] <- NA
+    return(x)
+}
+
+PostalCode <- nullToNA(PostalCode) %>% unlist()
+
+#Extracting address
+Address <- map(ref , ~.[["address"]][["line1"]]) 
+Address <- nullToNA(Address) %>% unlist()
+
+# Extracting url
+URL <- map_chr(ref, ~.[["url"]])
+
+# Extracting longitude
+Longitude <- map(ref, ~.[["location"]][["longitude"]]) 
+Longitude <- nullToNA(Longitude) %>% unlist()
+
+# Extracting latitude
+Latitude <- map(ref, ~.[["location"]][["latitude"]]) 
+Latitude <- nullToNA(Latitude) %>% unlist()
+
+# Putting into dataframe
+venues <- data.frame(Name, City, PostalCode, Address, URL, Longitude, Latitude)
+```
+
+### Interacting with the API - advanced
+
+<div class="alert alert-block alert-info">
+9. Have a closer look at the list element named page. Did your ``GET`` request from exercise (7) return all event locations in Germany? Obviously not - there are of course much more venues in Germany than those contained in this list. Your ``GET`` request only yielded the first results page containing the first 20 out of several thousands of venues. Check the API documentation under the section Venue Search. How can you request the venues from the remaining results pages? Iterate over the results pages and perform ``GET`` requests for all venues in Germany. After each iteration, extract the seven variables ``name``, ``city``, ``postalCode``, ``address``, ``url``, ``longitude``, and ``latitude``. Join the information in one large data frame. Print the first 10 rows and the shape of the resulting data frame.
+</div>
+
+```{r}
+NameAll <- c()
+CityAll <- c()
+PostalCodeAll <- c()
+AddressAll <- c()
+URLAll <- c()
+LongitudeAll <- c()
+LatitudeAll <- c()
+
+for (i in 0:237) {
+  Sys.sleep(.2)
+  allVenues <- GET("https://app.ticketmaster.com/discovery/v2/venues/",
+                   query = list(apikey = ticketmaster_key,
+                                "countryCode" = "DE", 
+                                 "page"   = i))
+  
+  allVenues_content <- content(allVenues)
+  refAll <- allVenues_content[["_embedded"]][["venues"]]
+  
+  Name <- map_chr(refAll, ~.[["name"]])
+  City <- map_chr(refAll, ~.[["city"]][["name"]])
+  PostalCode <- map(refAll, ~.[["postalCode"]])
+  PostalCode <- nullToNA(PostalCode) %>% unlist()
+  Address <- map(refAll , ~.[["address"]][["line1"]]) 
+  Address <- nullToNA(Address) %>% unlist()
+  URL <- map_chr(refAll, ~.[["url"]])
+  Longitude <- map(refAll, ~.[["location"]][["longitude"]]) 
+  Longitude <- nullToNA(Longitude) %>% unlist()
+  Latitude <- map(refAll, ~.[["location"]][["latitude"]]) 
+  Latitude <- nullToNA(Latitude) %>% unlist()
+  
+  NameAll <- append(NameAll, Name)
+  CityAll <- append(CityAll, City)
+  PostalCodeAll <- append(PostalCodeAll, PostalCode)
+  AddressAll <- append(AddressAll, Address)
+  URLAll <- append(URLAll, URL)
+  LongitudeAll <- append(LongitudeAll, Longitude)
+  LatitudeAll <- append(LatitudeAll, Latitude)
+
+}
+```
