@@ -59,11 +59,12 @@ the ``content`` from the ``response`` object and inspect the resulting list. Des
 ```{r}
 APIcontent <- GET("https://app.ticketmaster.com/discovery/v2/venues/",  # only package version v2 gives results
                   query = list(apikey = ticketmaster_key,
-                               "countryCode" = "DE")) %>% content()
+                               "countryCode" = "DE",
+                               "locale" = "*")) %>% content()
 #APIcontent
 ```
 
-The content list contains an embedded list of venues, each venue with its own sublist. Each venue list contains several elements (e.g., name, type, url, timezone etc.). Some of these elements stand alone (such as `name` "Grosse Freiheit 36"), while other elements are themselves another list (such as `country` which contains both the `name` "Germany" and the `countrycode` "DE"). At the end of the content list, there is a summary of `totalElements` and `totalPages` which indicates that the request has a total of 4745 elements (aka venues) distributed over 238 pages on the website.
+The content list contains an embedded list of venues, each venue with its own sublist. Each venue list contains several elements (e.g., name, type, url, timezone etc.). Some of these elements stand alone (such as `name` "Grosse Freiheit 36"), while other elements are themselves another list (such as `country` which contains both the `name` "Germany" and the `countrycode` "DE"). At the end of the content list, there is a summary of `totalElements` and `totalPages` which indicates that the request has a total of 12932 elements (aka venues) distributed over 647 pages on the website.
 
 <div class="alert alert-block alert-info">
 8. Extract the ``name``, the ``city``, the ``postalCode`` and ``address``, as well as the ``url`` and the ``longitude`` and ``latitude`` of the venues to a data frame.
@@ -113,6 +114,7 @@ venues <- data.frame(Name, City, PostalCode, Address, URL, Longitude, Latitude)
 </div>
 
 ```{r}
+# Creating empty lists to be appeneded
 NameAll <- c()
 CityAll <- c()
 PostalCodeAll <- c()
@@ -121,23 +123,33 @@ URLAll <- c()
 LongitudeAll <- c()
 LatitudeAll <- c()
 
-for (i in 0:237) {
+# for loop for all pages 
+for (i in 0:646) {
   Sys.sleep(.2)
-  allVenues <- GET("https://app.ticketmaster.com/discovery/v2/venues/",
-                   query = list(apikey = ticketmaster_key,
-                                "countryCode" = "DE", 
-                                 "page"   = i))
+  refAll <- NULL
   
-  allVenues_content <- content(allVenues)
-  refAll <- allVenues_content[["_embedded"]][["venues"]]
+  # Preventing "Error in x[sapply(x, is.null)] <- NA : invalid subscript type 'list'"
+  while (is.null(refAll)) {
+    allVenues <- GET("https://app.ticketmaster.com/discovery/v2/venues/",
+                     query = list(apikey = ticketmaster_key,
+                                  "countryCode" = "DE",
+                                  "locale" = "*",
+                                  "page" = i))
+    
+    allVenues_content <- content(allVenues)
+    refAll <- allVenues_content[["_embedded"]][["venues"]]
+  }
   
-  Name <- map_chr(refAll, ~.[["name"]])
-  City <- map_chr(refAll, ~.[["city"]][["name"]])
+  Name <- map(refAll, ~.[["name"]])
+  Name <- nullToNA(Name) %>% unlist()
+  City <- map(refAll, ~.[["city"]][["name"]])
+  City <- nullToNA(City) %>% unlist()
   PostalCode <- map(refAll, ~.[["postalCode"]])
   PostalCode <- nullToNA(PostalCode) %>% unlist()
   Address <- map(refAll , ~.[["address"]][["line1"]]) 
   Address <- nullToNA(Address) %>% unlist()
-  URL <- map_chr(refAll, ~.[["url"]])
+  URL <- map(refAll, ~.[["url"]])
+  URL <- nullToNA(URL) %>% unlist()
   Longitude <- map(refAll, ~.[["location"]][["longitude"]]) 
   Longitude <- nullToNA(Longitude) %>% unlist()
   Latitude <- map(refAll, ~.[["location"]][["latitude"]]) 
@@ -150,6 +162,11 @@ for (i in 0:237) {
   URLAll <- append(URLAll, URL)
   LongitudeAll <- append(LongitudeAll, Longitude)
   LatitudeAll <- append(LatitudeAll, Latitude)
-
 }
+
+# Combine into dataframe
+venues_DE <- data.frame(NameAll, CityAll, PostalCodeAll, AddressAll, URLAll, LongitudeAll, LatitudeAll)
+
+dim(venues_DE)
+print(head(venues_DE, 10))
 ```
