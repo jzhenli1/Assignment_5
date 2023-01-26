@@ -18,6 +18,7 @@ library(jsonlite)
 library(httr)
 library(rlist)
 library(tidyverse)
+library(maps)
 
 rm(list = ls())
 setwd(
@@ -114,7 +115,7 @@ venues <- data.frame(Name, City, PostalCode, Address, URL, Longitude, Latitude)
 </div>
 
 ```{r}
-# Creating empty lists to be appeneded
+# Creating empty lists to be appended
 NameAll <- c()
 CityAll <- c()
 PostalCodeAll <- c()
@@ -167,6 +168,53 @@ for (i in 0:646) {
 # Combine into dataframe
 venues_DE <- data.frame(NameAll, CityAll, PostalCodeAll, AddressAll, URLAll, LongitudeAll, LatitudeAll)
 
+# Change variables from character to double
+venues_DE$PostalCodeAll <- as.double(venues_DE$PostalCodeAll)
+venues_DE$LongitudeAll <- as.double(venues_DE$LongitudeAll)
+venues_DE$LatitudeAll <- as.double(venues_DE$LatitudeAll)
+
+
 dim(venues_DE)
 print(head(venues_DE, 10))
+```
+
+### Visualizing the extracted data
+
+<div class="alert alert-block alert-info">
+10. Add points to the map indicating the locations of the event venues across Germany.
+</div>
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(venues_DE) +
+  borders("world", "Germany", colour = "black", fill = "grey90") +
+  
+  # Adding coordinates of locations
+  geom_point(aes(LongitudeAll, LatitudeAll), alpha = 1/100, size = 0.5) + 
+  # alpha (transparency) makes venue overlap more visible
+  
+  theme_void() +
+  coord_quickmap() +
+  labs(title = "Event locations across Germany",
+  caption = "Source: ticketmaster.com") +
+  theme(title = element_text(size = 8, face = 'bold'),
+  plot.caption = element_text(face = "italic"))
+```
+
+<div class="alert alert-block alert-info">
+11. You will find that some coordinates lie way beyond the German borders and can be assumed to be faulty. Set coordinate values to NA where the value of ``longitude`` is outside the range (``5.866``, ``15.042``) or where the value of latitude is outside the range (``47.270``, ``55.059``)
+</div>
+
+```{r, message=FALSE, warning=FALSE}
+venues_DE$LongitudeAll[venues_DE$LongitudeAll < 5.866 | venues_DE$LongitudeAll > 15.042] <- NA
+venues_DE$LatitudeAll[venues_DE$LatitudeAll < 47.270 | venues_DE$LatitudeAll > 55.059] <- NA
+
+ggplot(venues_DE) +
+  borders("world", "Germany", colour = "black", fill = "grey90") +
+  geom_point(aes(LongitudeAll, LatitudeAll), alpha = 1/10) + 
+  theme_void() +
+  coord_quickmap() +
+  labs(title = "Event locations across Germany",
+  caption = "Source: ticketmaster.com") +
+  theme(title = element_text(size = 8, face = 'bold'),
+  plot.caption = element_text(face = "italic"))
 ```
