@@ -18,7 +18,7 @@ library(jsonlite)
 library(httr)
 library(rlist)
 library(tidyverse)
-library(maps)
+#library(maps)
 
 rm(list = ls())
 setwd(
@@ -114,59 +114,78 @@ venues <- data.frame(Name, City, PostalCode, Address, URL, Longitude, Latitude)
 9. Have a closer look at the list element named page. Did your ``GET`` request from exercise (7) return all event locations in Germany? Obviously not - there are of course much more venues in Germany than those contained in this list. Your ``GET`` request only yielded the first results page containing the first 20 out of several thousands of venues. Check the API documentation under the section Venue Search. How can you request the venues from the remaining results pages? Iterate over the results pages and perform ``GET`` requests for all venues in Germany. After each iteration, extract the seven variables ``name``, ``city``, ``postalCode``, ``address``, ``url``, ``longitude``, and ``latitude``. Join the information in one large data frame. Print the first 10 rows and the shape of the resulting data frame.
 </div>
 
-```{r}
-# Creating empty lists to be appended
-NameAll <- c()
-CityAll <- c()
-PostalCodeAll <- c()
-AddressAll <- c()
-URLAll <- c()
-LongitudeAll <- c()
-LatitudeAll <- c()
+```{r, message=FALSE, warning=FALSE}
+# Creating a function for easier reproducibility of the process
+venues_df <- function(countrycode){
+  APIcontent <- GET("https://app.ticketmaster.com/discovery/v2/venues/",
+                    query = list(apikey = ticketmaster_key,
+                                 "countryCode" = countrycode,
+                                 "locale" = "*")) %>% content()
+  # Determining number of pages
+  pages <- as.numeric(APIcontent[["page"]][["totalPages"]])
 
-# for loop for all pages 
-for (i in 0:646) {
-  Sys.sleep(.2)
-  refAll <- NULL
-  
-  # Preventing "Error in x[sapply(x, is.null)] <- NA : invalid subscript type 'list'"
-  while (is.null(refAll)) {
-    allVenues <- GET("https://app.ticketmaster.com/discovery/v2/venues/",
-                     query = list(apikey = ticketmaster_key,
-                                  "countryCode" = "DE",
-                                  "locale" = "*",
-                                  "page" = i))
+  # Creating empty lists to be appended
+  NameAll <- c()
+  CityAll <- c()
+  PostalCodeAll <- c()
+  AddressAll <- c()
+  URLAll <- c()
+  LongitudeAll <- c()
+  LatitudeAll <- c()
+
+  # for loop for all pages 
+  for (i in 0:(pages - 1)) {
     
-    allVenues_content <- content(allVenues)
-    refAll <- allVenues_content[["_embedded"]][["venues"]]
-  }
+    # To prevent exceeding rate limit
+    Sys.sleep(.2)
+    
+    refAll <- NULL
+    
+    # Preventing "Error in x[sapply(x, is.null)] <- NA : invalid subscript type 'list'"
+    while (is.null(refAll)) {
+      allVenues <- GET("https://app.ticketmaster.com/discovery/v2/venues/",
+                       query = list(apikey = ticketmaster_key,
+                                    "countryCode" = countrycode,
+                                    "locale" = "*",
+                                    "page" = i))
+      
+      allVenues_content <- content(allVenues)
+      refAll <- allVenues_content[["_embedded"]][["venues"]]
+      }
+    
+    Name <- map(refAll, ~.[["name"]])
+    Name <- nullToNA(Name) %>% unlist()
+    City <- map(refAll, ~.[["city"]][["name"]])
+    City <- nullToNA(City) %>% unlist()
+    PostalCode <- map(refAll, ~.[["postalCode"]])
+    PostalCode <- nullToNA(PostalCode) %>% unlist()
+    Address <- map(refAll , ~.[["address"]][["line1"]]) 
+    Address <- nullToNA(Address) %>% unlist()
+    URL <- map(refAll, ~.[["url"]])
+    URL <- nullToNA(URL) %>% unlist()
+    Longitude <- map(refAll, ~.[["location"]][["longitude"]]) 
+    Longitude <- nullToNA(Longitude) %>% unlist()
+    Latitude <- map(refAll, ~.[["location"]][["latitude"]]) 
+    Latitude <- nullToNA(Latitude) %>% unlist()
   
-  Name <- map(refAll, ~.[["name"]])
-  Name <- nullToNA(Name) %>% unlist()
-  City <- map(refAll, ~.[["city"]][["name"]])
-  City <- nullToNA(City) %>% unlist()
-  PostalCode <- map(refAll, ~.[["postalCode"]])
-  PostalCode <- nullToNA(PostalCode) %>% unlist()
-  Address <- map(refAll , ~.[["address"]][["line1"]]) 
-  Address <- nullToNA(Address) %>% unlist()
-  URL <- map(refAll, ~.[["url"]])
-  URL <- nullToNA(URL) %>% unlist()
-  Longitude <- map(refAll, ~.[["location"]][["longitude"]]) 
-  Longitude <- nullToNA(Longitude) %>% unlist()
-  Latitude <- map(refAll, ~.[["location"]][["latitude"]]) 
-  Latitude <- nullToNA(Latitude) %>% unlist()
+    NameAll <- append(NameAll, Name)
+    CityAll <- append(CityAll, City)
+    PostalCodeAll <- append(PostalCodeAll, PostalCode)
+    AddressAll <- append(AddressAll, Address)
+    URLAll <- append(URLAll, URL)
+    LongitudeAll <- append(LongitudeAll, Longitude)
+    LatitudeAll <- append(LatitudeAll, Latitude)
+    }
   
-  NameAll <- append(NameAll, Name)
-  CityAll <- append(CityAll, City)
-  PostalCodeAll <- append(PostalCodeAll, PostalCode)
-  AddressAll <- append(AddressAll, Address)
-  URLAll <- append(URLAll, URL)
-  LongitudeAll <- append(LongitudeAll, Longitude)
-  LatitudeAll <- append(LatitudeAll, Latitude)
+  # Combine into dataframe
+  df <- data.frame(NameAll, CityAll, PostalCodeAll, AddressAll, 
+                          URLAll, LongitudeAll, LatitudeAll)
+  
+  return(df)
 }
 
-# Combine into dataframe
-venues_DE <- data.frame(NameAll, CityAll, PostalCodeAll, AddressAll, URLAll, LongitudeAll, LatitudeAll)
+# Call the function
+venues_DE <- venues_df("DE")
 
 # Change variables from character to double
 venues_DE$PostalCodeAll <- as.double(venues_DE$PostalCodeAll)
@@ -218,3 +237,9 @@ ggplot(venues_DE) +
   theme(title = element_text(size = 8, face = 'bold'),
   plot.caption = element_text(face = "italic"))
 ```
+
+### Event locations in other countries
+
+<div class="alert alert-block alert-info">
+12. Repeat exercises (9)–(11) for another European country of your choice.
+</div>
