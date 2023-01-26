@@ -18,7 +18,6 @@ library(jsonlite)
 library(httr)
 library(rlist)
 library(tidyverse)
-#library(maps)
 
 rm(list = ls())
 setwd(
@@ -243,3 +242,42 @@ ggplot(venues_DE) +
 <div class="alert alert-block alert-info">
 12. Repeat exercises (9)–(11) for another European country of your choice.
 </div>
+
+```{r, message=FALSE, warning=FALSE}
+# Country: Switzerland, code: "CH"
+venues_CH <- venues_df("CH")
+
+venues_CH$PostalCodeAll <- as.double(venues_CH$PostalCodeAll)
+venues_CH$LongitudeAll <- as.double(venues_CH$LongitudeAll)
+venues_CH$LatitudeAll <- as.double(venues_CH$LatitudeAll)
+
+dim(venues_CH)
+print(head(venues_CH, 10))
+
+# Preliminary visualization
+ggplot(venues_CH) +
+  borders("world", "Switzerland", colour = "black", fill = "grey90") +
+  geom_point(aes(LongitudeAll, LatitudeAll), alpha = 1/100, size = 0.5) + 
+  theme_void() +
+  coord_quickmap() +
+  labs(title = "Event locations across Switzerland",
+  caption = "Source: ticketmaster.com") +
+  theme(title = element_text(size = 8, face = 'bold'),
+  plot.caption = element_text(face = "italic"))
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Visualization with coordinate restrictions
+venues_CH$LongitudeAll[venues_CH$LongitudeAll < 5.956 | venues_CH$LongitudeAll > 10.492] <- NA
+venues_CH$LatitudeAll[venues_CH$LatitudeAll < 45.818 | venues_CH$LatitudeAll > 47.808] <- NA
+
+ggplot(venues_CH) +
+  borders("world", "Switzerland", colour = "black", fill = "grey90") +
+  geom_point(aes(LongitudeAll, LatitudeAll), alpha = 1/10) + 
+  theme_void() +
+  coord_quickmap() +
+  labs(title = "Event locations across Switzerland",
+  caption = "Source: ticketmaster.com") +
+  theme(title = element_text(size = 8, face = 'bold'),
+  plot.caption = element_text(face = "italic"))
+```
